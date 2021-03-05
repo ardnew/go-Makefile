@@ -73,7 +73,7 @@ all: build
 
 .PHONY: clean
 clean:
-	$(rm) "$(bindir)" "$(pkgver)/$(triple)" "$(pkgver)/$(triple)$(zipext)" "$(pkgver)/$(triple)$(tgzext)" "$(pkgver)/$(triple)$(tbzext)"
+	$(rm) "$(bindir)" "$(pkgver)/$(triple)"
 	$(go) clean
 
 .PHONY: build
@@ -97,21 +97,21 @@ $(binexe): $(bindir)
 #  targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)
 
 .PHONY: zip
-zip: clean $(pkgver)/$(triple)$(zipext)
+zip: $(pkgver)/$(triple)$(zipext)
 
 $(pkgver)/%$(zipext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
 	cd "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
 
 .PHONY: tgz
-tgz: clean $(pkgver)/$(triple)$(tgzext)
+tgz: $(pkgver)/$(triple)$(tgzext)
 
 $(pkgver)/%$(tgzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
 	cd "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
-tbz: clean $(pkgver)/$(triple)$(tbzext)
+tbz: $(pkgver)/$(triple)$(tbzext)
 
 $(pkgver)/%$(tbzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
