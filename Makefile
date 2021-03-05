@@ -73,7 +73,7 @@ all: build
 
 .PHONY: clean
 clean:
-	$(rm) "$(bindir)" "$(pkgver)/$(triple)" "$(pkgver)/$(triple)$(tgzext)" "$(pkgver)/$(triple)$(tbzext)" "$(pkgver)/$(triple)$(zipext)"
+	$(rm) "$(bindir)" "$(pkgver)/$(triple)" "$(pkgver)/$(triple)$(zipext)" "$(pkgver)/$(triple)$(tgzext)" "$(pkgver)/$(triple)$(tbzext)"
 	$(go) clean
 
 .PHONY: build
@@ -108,12 +108,12 @@ pkg: clean $(pkgver)/$(triple)$(tgzext)
 
 $(pkgver)/%$(tgzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
-	cd "$(@D)" && $(tgz) "$(*)$(zipext)" "$(*)"
+	cd "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
 pkg: clean $(pkgver)/$(triple)$(tbzext)
 
 $(pkgver)/%$(tbzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
-	cd "$(@D)" && $(tbz) "$(*)$(zipext)" "$(*)"
+	cd "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
 
