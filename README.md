@@ -8,7 +8,7 @@ Simply call `make` without arguments to build the project with default target `b
 To cross-compile the project for a different target, provide a `platform` variable definition with a valid `${GOOS}-${GOARCH}` tuple as argument. Other variables may also be specified this way. For example, to create a 64-bit Windows zip package with a specific version:
 
 ```
-$ make platform=windows-amd64 version=1.2.3
+$ make zip platform=windows-amd64 version=1.2.3
 ```
 
 ### Configuration
