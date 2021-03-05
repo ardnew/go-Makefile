@@ -97,21 +97,21 @@ $(binexe): $(bindir)
 #  targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)
 
 .PHONY: zip
-pkg: clean $(pkgver)/$(triple)$(zipext)
+zip: clean $(pkgver)/$(triple)$(zipext)
 
 $(pkgver)/%$(zipext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
 	cd "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
 
 .PHONY: tgz
-pkg: clean $(pkgver)/$(triple)$(tgzext)
+tgz: clean $(pkgver)/$(triple)$(tgzext)
 
 $(pkgver)/%$(tgzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
 	cd "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
-pkg: clean $(pkgver)/$(triple)$(tbzext)
+tbz: clean $(pkgver)/$(triple)$(tbzext)
 
 $(pkgver)/%$(tbzext): $(binexe) $(pkgver) $(pkgver)/%
 	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
