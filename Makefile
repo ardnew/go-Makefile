@@ -1,8 +1,8 @@
 # ------------------------------------------------------------------------------
 #  project configuration
 
-project   ?= svngrab
-version   ?= 0.2.1
+project   ?= myproject
+version   ?= 0.1.2
 branch    ?= $(shell git symbolic-ref --short HEAD)
 revision  ?= $(shell git rev-parse --short HEAD)
 buildtime ?= $(shell date -u '+%FT%TZ')
