@@ -1,4 +1,4 @@
-# gomake
+# go-Makefile
 #### A simple Makefile for cross-compiling Go projects
 
 ## Usage
