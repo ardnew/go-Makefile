@@ -18,8 +18,8 @@ At the top of the `Makefile`, there are several variables that are used for conf
 In particular, you will probably want to set `project` and `version` so that you don't have to specify them every time:
 
 ```make
-project   ?= project-name
-version   ?= 1.0.0
+project   ?= myproject
+version   ?= 0.1.2
 branch    ?= $(shell git symbolic-ref --short HEAD)
 revision  ?= $(shell git rev-parse --short HEAD)
 buildtime ?= $(shell date -u '+%FT%TZ')
