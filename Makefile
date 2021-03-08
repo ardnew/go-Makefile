@@ -1,24 +1,31 @@
 # ------------------------------------------------------------------------------
-#  project configuration
+#  project configuration (symbols exported verbatim via Go linker)
 
-project   ?= myproject
-version   ?= 0.1.2
-branch    ?= $(shell git symbolic-ref --short HEAD)
-revision  ?= $(shell git rev-parse --short HEAD)
-buildtime ?= $(shell date -u '+%FT%TZ')
-
-# default build target
-platform ?= linux-amd64
+PROJECT   ?= my-project
+VERSION   ?= 0.1.0
+BRANCH    ?= $(shell git symbolic-ref --short HEAD)
+REVISION  ?= $(shell git rev-parse --short HEAD)
+BUILDTIME ?= $(shell date -u '+%FT%TZ')
+PLATFORM  ?= linux-amd64
 
 # default output paths
-binpath ?= bin
-pkgpath ?= pkg
+BINPATH ?= bin
+PKGPATH ?= pkg
+
+# consider all Go source files recursively from working dir
+SOURCES ?= $(shell find . -type f -iname '*.go')
+
+# other non-Go source files that may affect build staleness
+METASOURCES ?= Makefile go.mod
 
 # other files to include with distribution packages
-extrafiles ?= LICENSE README.md
+EXTRAFILES ?= LICENSE README.md
 
-# Makefile identifiers to export to Go via linker
-exports ?= project version branch revision buildtime
+# Go package import path where the exported symbols will be defined
+IMPORTPATH ?= main
+
+# Makefile identifiers to export (as strings) via Go linker
+EXPORTS ?= PROJECT VERSION BRANCH REVISION BUILDTIME PLATFORM
 
 # ------------------------------------------------------------------------------
 #  constants and derived variables
@@ -32,13 +39,13 @@ platforms :=                                           \
 	android-amd64 android-386 android-arm64 android-arm
 
 # invalid build target provided
-ifeq "" "$(strip $(filter $(platforms),$(platform)))"
-$(error unsupported platform "$(platform)" (see: "make help"))
+ifeq "" "$(strip $(filter $(platforms),$(PLATFORM)))"
+$(error unsupported PLATFORM "$(PLATFORM)" (see: "make help"))
 endif
 
-# parse OS (linux, darwin, ...) and arch (386, amd64, ...) from platform
-os   := $(word 1,$(subst -, ,$(platform)))
-arch := $(word 2,$(subst -, ,$(platform)))
+# parse OS (linux, darwin, ...) and arch (386, amd64, ...) from PLATFORM
+os   := $(word 1,$(subst -, ,$(PLATFORM)))
+arch := $(word 2,$(subst -, ,$(PLATFORM)))
 
 # output file extensions
 binext := $(if $(filter windows,$(os)),.exe,)
@@ -47,23 +54,49 @@ tbzext := .tar.bz2
 zipext := .zip
 
 # system commands
+echo  := echo
+test  := test
+cd    := cd
 rm    := rm -rvf
-go    := GOOS="$(os)" GOARCH="$(arch)" go
-mkdir := mkdir -pv
 mv    := mv -v
 cp    := cp -rv
+mkdir := mkdir -pv
+chmod := chmod -v
+tail  := tail
+grep  := command grep
+go    := GOOS="$(os)" GOARCH="$(arch)" go
 tgz   := tar -czvf
 tbz   := tar -cjvf
 zip   := zip -vr
 
-# go build flags
-goflags ?= -v -ldflags='-w -s $(foreach %,$(exports),-X "main.$(%)=$($(%))")'
+# go build flags: export variables as strings to the selected package
+goflags ?= -v -ldflags='-w -s $(foreach %,$(EXPORTS),-X "$(IMPORTPATH).$(%)=$($(%))")'
 
 # output paths
-bindir := $(binpath)/$(platform)
-binexe := $(bindir)/$(project)$(binext)
-pkgver := $(pkgpath)/$(version)
-triple := $(project)-$(version)-$(platform)
+bindir := $(BINPATH)/$(PLATFORM)
+binexe := $(bindir)/$(PROJECT)$(binext)
+pkgver := $(PKGPATH)/$(VERSION)
+triple := $(PROJECT)-$(VERSION)-$(PLATFORM)
+
+# Since it isn't possible to pass arguments from make to the target executable
+# (without, e.g., inline variable definitions), we simply use a separate shell
+# script that builds the project and calls the executable.
+# You can thus call this shell script, and all arguments will be passed along.
+# Use the 'make run' target to generate this script in the project root.
+runsh := run.sh
+define RUNSH
+#!/bin/sh
+# Description:
+# 	Rebuild and run $(binexe) with command-line arguments.
+# 
+# Usage:
+# 	./$(runsh) [arg ...]
+# 
+if make build > /dev/null; then
+	"$(binexe)" $${@}
+fi
+endef
+export RUNSH
 
 # ------------------------------------------------------------------------------
 #  make targets
@@ -80,18 +113,25 @@ clean:
 build: $(binexe)
 
 .PHONY: vet
-vet:
+vet: $(SOURCES) $(METASOURCES)
 	$(go) vet
 
 .PHONY: run
-run: $(binexe)
-	@"$(binexe)"
+run: $(runsh)
 
 $(bindir) $(pkgver) $(pkgver)/$(triple):
-	@test -d "$(@)" || $(mkdir) "$(@)"
+	@$(test) -d "$(@)" || $(mkdir) "$(@)"
 
-$(binexe): $(bindir)
+$(binexe): $(SOURCES) $(METASOURCES) $(bindir)
 	$(go) build -o "$(@)" $(goflags)
+	@$(echo) " -- success: $(@)"
+
+$(runsh):
+	@$(echo) "$$RUNSH" > "$(@)"
+	@$(chmod) +x "$(@)"
+	@$(echo) " -- success: $(@)"
+	@$(echo)
+	@$(tail) -n +2 "$(@)" | $(grep) -oP '^#\K.*'
 
 # ------------------------------------------------------------------------------
 #  targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)
@@ -99,21 +139,21 @@ $(binexe): $(bindir)
 .PHONY: zip
 zip: $(pkgver)/$(triple)$(zipext)
 
-$(pkgver)/%$(zipext): $(binexe) $(pkgver) $(pkgver)/%
-	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
-	cd "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
+$(pkgver)/%$(zipext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
+	@$(cd) "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
 
 .PHONY: tgz
 tgz: $(pkgver)/$(triple)$(tgzext)
 
-$(pkgver)/%$(tgzext): $(binexe) $(pkgver) $(pkgver)/%
-	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
-	cd "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
+$(pkgver)/%$(tgzext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
+	@$(cd) "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
 tbz: $(pkgver)/$(triple)$(tbzext)
 
-$(pkgver)/%$(tbzext): $(binexe) $(pkgver) $(pkgver)/%
-	$(cp) "$(<)" $(extrafiles) "$(@D)/$(*)"
-	cd "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
+$(pkgver)/%$(tbzext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
+	@$(cd) "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
 
