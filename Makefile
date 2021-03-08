@@ -93,7 +93,7 @@ define RUNSH
 # 	./$(runsh) [arg ...]
 # 
 if make build > /dev/null; then
-	"$(binexe)" $${@}
+	"$(binexe)" "$${@}"
 fi
 endef
 export RUNSH
