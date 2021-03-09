@@ -137,23 +137,23 @@ $(runsh):
 #  targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)
 
 .PHONY: zip
-zip: $(pkgver)/$(triple)$(zipext)
+zip: $(EXTRAFILES) $(pkgver)/$(triple)$(zipext)
 
-$(pkgver)/%$(zipext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+$(pkgver)/%$(zipext): $(binexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
 
 .PHONY: tgz
-tgz: $(pkgver)/$(triple)$(tgzext)
+tgz: $(EXTRAFILES) $(pkgver)/$(triple)$(tgzext)
 
-$(pkgver)/%$(tgzext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+$(pkgver)/%$(tgzext): $(binexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
-tbz: $(pkgver)/$(triple)$(tbzext)
+tbz: $(EXTRAFILES) $(pkgver)/$(triple)$(tbzext)
 
-$(pkgver)/%$(tbzext): $(EXTRAFILES) $(binexe) $(pkgver) $(pkgver)/%
+$(pkgver)/%$(tbzext): $(binexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
 
