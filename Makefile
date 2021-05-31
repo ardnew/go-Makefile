@@ -1,12 +1,34 @@
 # ------------------------------------------------------------------------------
+#  system configuration
+
+# verify we have a valid GOPATH
+GOPATH ?= $(shell go env GOPATH)
+ifeq "" "$(strip $(GOPATH))"
+$(error invalid GOPATH="$(GOPATH)")
+endif
+
+# ------------------------------------------------------------------------------
 #  project configuration (symbols exported verbatim via Go linker)
 
 PROJECT   ?= my-project
+IMPORT    ?= host/user/$(PROJECT)
 VERSION   ?= 0.1.0
-BRANCH    ?= $(shell git symbolic-ref --short HEAD)
-REVISION  ?= $(shell git rev-parse --short HEAD)
 BUILDTIME ?= $(shell date -u '+%FT%TZ')
 PLATFORM  ?= linux-amd64
+
+# determine git branch and revision if metadata exists
+ifneq "" "$(wildcard $(GOPATH)/src/$(IMPORT)/.git)"
+# verify we have git installed
+ifneq "" "$(shell which git)"
+BRANCH   ?= $(shell git symbolic-ref --short HEAD)
+REVISION ?= $(shell git rev-parse --short HEAD)
+endif
+endif
+
+# if the command being built is different than the project import path, specify
+# its import path here. this will be used as the output executable when making
+# targets "build", "run", etc. IMPORT is used if COMMAND is left undefined.
+#COMMAND ?= $(IMPORT)/cmd/$(PROJECT)
 
 # default output paths
 BINPATH ?= bin
@@ -22,10 +44,11 @@ METASOURCES ?= Makefile go.mod
 EXTRAFILES ?= LICENSE README.md
 
 # Go package import path where the exported symbols will be defined
-IMPORTPATH ?= main
+EXPORTPATH ?= main
 
 # Makefile identifiers to export (as strings) via Go linker
-EXPORTS ?= PROJECT VERSION BRANCH REVISION BUILDTIME PLATFORM
+EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
+	$(if $(BRANCH),BRANCH,) $(if $(REVISION),REVISION,) 
 
 # ------------------------------------------------------------------------------
 #  constants and derived variables
@@ -70,9 +93,10 @@ tbz   := tar -cjvf
 zip   := zip -vr
 
 # go build flags: export variables as strings to the selected package
-goflags ?= -v -ldflags='-w -s $(foreach %,$(EXPORTS),-X "$(IMPORTPATH).$(%)=$($(%))")'
+goflags ?= -v -ldflags='-w -s $(foreach %,$(EXPORTS),-X "$(EXPORTPATH).$(%)=$($(%))")'
 
 # output paths
+srcdir := $(or $(COMMAND),$(IMPORT))
 bindir := $(BINPATH)/$(PLATFORM)
 binexe := $(bindir)/$(PROJECT)$(binext)
 pkgver := $(PKGPATH)/$(VERSION)
@@ -114,7 +138,7 @@ build: $(binexe)
 
 .PHONY: vet
 vet: $(SOURCES) $(METASOURCES)
-	$(go) vet
+	$(go) vet "$(IMPORT)" $(if $(COMMAND),"$(COMMAND)",)
 
 .PHONY: run
 run: $(runsh)
@@ -123,7 +147,7 @@ $(bindir) $(pkgver) $(pkgver)/$(triple):
 	@$(test) -d "$(@)" || $(mkdir) "$(@)"
 
 $(binexe): $(SOURCES) $(METASOURCES) $(bindir)
-	$(go) build -o "$(@)" $(goflags)
+	$(go) build -o "$(@)" $(goflags) "$(srcdir)"
 	@$(echo) " -- success: $(@)"
 
 $(runsh):
