@@ -1,5 +1,6 @@
-# ------------------------------------------------------------------------------
-#  system configuration
+# +----------------------------------------------------------------------------+
+# | system configuration                                                       |
+# +----------------------------------------------------------------------------+
 
 # verify we have a valid GOPATH
 GOPATH ?= $(shell go env GOPATH)
@@ -7,8 +8,9 @@ ifeq "" "$(strip $(GOPATH))"
 $(error invalid GOPATH="$(GOPATH)")
 endif
 
-# ------------------------------------------------------------------------------
-#  project configuration (symbols exported verbatim via Go linker)
+# +----------------------------------------------------------------------------+
+# | project symbols exported verbatim via go linker                            |
+# +----------------------------------------------------------------------------+
 
 PROJECT   ?= my-project
 IMPORT    ?= host/user/$(PROJECT)
@@ -25,10 +27,13 @@ REVISION ?= $(shell git rev-parse --short HEAD)
 endif
 endif
 
-# if the command being built is different than the project import path, specify
-# its import path here. this will be used as the output executable when making
-# targets "build", "run", etc. IMPORT is used if COMMAND is left undefined.
-#COMMAND ?= $(IMPORT)/cmd/$(PROJECT)
+# Makefile identifiers to export (as strings) via Go linker
+EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
+	$(if $(BRANCH),BRANCH,) $(if $(REVISION),REVISION,) 
+
+# +----------------------------------------------------------------------------+
+# | build paths and project files                                              |
+# +----------------------------------------------------------------------------+
 
 # default output paths
 BINPATH ?= bin
@@ -46,12 +51,20 @@ EXTRAFILES ?= LICENSE README.md
 # Go package import path where the exported symbols will be defined
 EXPORTPATH ?= main
 
-# Makefile identifiers to export (as strings) via Go linker
-EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
-	$(if $(BRANCH),BRANCH,) $(if $(REVISION),REVISION,) 
+# if the command being built is different than the project import path, define
+# GOCMD as that import path. this will be used as the output executable when
+# making targets "build", "run", "install", etc.
+ifneq "" "$(wildcard cmd/$(PROJECT))"
+GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
+else
+GOCMD ?= # if left undefined, uses IMPORT
+endif
 
-# ------------------------------------------------------------------------------
-#  constants and derived variables
+#       >=== YOU SHOULDN'T HAVE TO MODIFY ANYTHING BELOW THIS LINE ===>
+
+# +----------------------------------------------------------------------------+
+# | constants and derived variables                                            |
+# +----------------------------------------------------------------------------+
 
 # supported platforms (GOARCH-GOOS)
 platforms :=                                           \
@@ -96,9 +109,11 @@ zip   := zip -vr
 goflags ?= -v -ldflags='-w -s $(foreach %,$(EXPORTS),-X "$(EXPORTPATH).$(%)=$($(%))")'
 
 # output paths
-srcdir := $(or $(COMMAND),$(IMPORT))
-bindir := $(BINPATH)/$(PLATFORM)
+srcdir := $(or $(GOCMD),$(IMPORT))
+bindir := $(shell go env GOPATH)/bin
 binexe := $(bindir)/$(PROJECT)$(binext)
+outdir := $(BINPATH)/$(PLATFORM)
+outexe := $(outdir)/$(PROJECT)$(binext)
 pkgver := $(PKGPATH)/$(VERSION)
 triple := $(PROJECT)-$(VERSION)-$(PLATFORM)
 
@@ -111,42 +126,52 @@ runsh := run.sh
 define RUNSH
 #!/bin/sh
 # Description:
-# 	Rebuild and run $(binexe) with command-line arguments.
+# 	Rebuild and run $(outexe) with command-line arguments.
 # 
 # Usage:
 # 	./$(runsh) [arg ...]
 # 
-if make build > /dev/null; then
-	"$(binexe)" "$${@}"
+if make -s build; then
+	"$(outexe)" "$${@}"
 fi
 endef
 export RUNSH
 
-# ------------------------------------------------------------------------------
-#  make targets
+# +----------------------------------------------------------------------------+
+# | make targets                                                               |
+# +----------------------------------------------------------------------------+
 
 .PHONY: all
 all: build
 
 .PHONY: clean
-clean:
-	$(rm) "$(bindir)" "$(pkgver)/$(triple)"
+clean: tidy
 	$(go) clean
+	$(rm) "$(outdir)" "$(pkgver)/$(triple)" "$(runsh)"
+
+.PHONY: tidy
+tidy: $(METASOURCES)
+	@$(go) mod tidy
 
 .PHONY: build
-build: $(binexe)
+build: tidy $(outexe)
+
+.PHONY: install
+install: tidy
+	$(go) install $(goflags) "$(srcdir)"
+	@$(echo) " -- success: $(binexe)"
 
 .PHONY: vet
-vet: $(SOURCES) $(METASOURCES)
-	$(go) vet "$(IMPORT)" $(if $(COMMAND),"$(COMMAND)",)
+vet: tidy $(SOURCES) $(METASOURCES)
+	$(go) vet "$(IMPORT)" $(if $(GOCMD),"$(GOCMD)",)
 
 .PHONY: run
 run: $(runsh)
 
-$(bindir) $(pkgver) $(pkgver)/$(triple):
+$(outdir) $(pkgver) $(pkgver)/$(triple):
 	@$(test) -d "$(@)" || $(mkdir) "$(@)"
 
-$(binexe): $(SOURCES) $(METASOURCES) $(bindir)
+$(outexe): $(SOURCES) $(METASOURCES) $(outdir)
 	$(go) build -o "$(@)" $(goflags) "$(srcdir)"
 	@$(echo) " -- success: $(@)"
 
@@ -155,29 +180,31 @@ $(runsh):
 	@$(chmod) +x "$(@)"
 	@$(echo) " -- success: $(@)"
 	@$(echo)
+	@# print the comment block at top of shell script for usage details
 	@$(tail) -n +2 "$(@)" | $(grep) -oP '^#\K.*'
 
-# ------------------------------------------------------------------------------
-#  targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)
+# +----------------------------------------------------------------------------+
+# | targets for creating versioned packages (.zip, .tar.gz, or .tar.bz2)       |
+# +----------------------------------------------------------------------------+
 
 .PHONY: zip
 zip: $(EXTRAFILES) $(pkgver)/$(triple)$(zipext)
 
-$(pkgver)/%$(zipext): $(binexe) $(pkgver)/%
+$(pkgver)/%$(zipext): $(outexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(zip) "$(*)$(zipext)" "$(*)"
 
 .PHONY: tgz
 tgz: $(EXTRAFILES) $(pkgver)/$(triple)$(tgzext)
 
-$(pkgver)/%$(tgzext): $(binexe) $(pkgver)/%
+$(pkgver)/%$(tgzext): $(outexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(tgz) "$(*)$(tgzext)" "$(*)"
 
 .PHONY: tbz
 tbz: $(EXTRAFILES) $(pkgver)/$(triple)$(tbzext)
 
-$(pkgver)/%$(tbzext): $(binexe) $(pkgver)/%
+$(pkgver)/%$(tbzext): $(outexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
 
