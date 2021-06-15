@@ -21,12 +21,15 @@ In particular, you will probably want to set `PROJECT` and `VERSION` so that you
 
 ```make
 PROJECT   ?= my-project
+IMPORT    ?= host/user/$(PROJECT)
 VERSION   ?= 0.1.0
-BRANCH    ?= $(shell git symbolic-ref --short HEAD)
-REVISION  ?= $(shell git rev-parse --short HEAD)
 BUILDTIME ?= $(shell date -u '+%FT%TZ')
 PLATFORM  ?= linux-amd64
+```
 
+And then optionally configure project file paths if you have unconventional project structure or content:
+
+```make
 # default output paths
 BINPATH ?= bin
 PKGPATH ?= pkg
@@ -34,22 +37,72 @@ PKGPATH ?= pkg
 # consider all Go source files recursively from working dir
 SOURCES ?= $(shell find . -type f -iname '*.go')
 
-# other non-Go source files that may affect build freshness
+# other non-Go source files that may affect build staleness
 METASOURCES ?= Makefile go.mod
 
 # other files to include with distribution packages
 EXTRAFILES ?= LICENSE README.md
 
-# Go package import path where the exported symbols will be defined
-IMPORTPATH ?= main
-
-# Makefile identifiers to export (as strings) via Go linker
-EXPORTS ?= PROJECT VERSION BRANCH REVISION BUILDTIME PLATFORM
+# Go package where the exported symbols will be defined
+EXPORTPATH ?= main
 ```
 
-By default, the `Makefile` expects your project to be in a Git repository. Because, when building, the `BRANCH` and `REVISION` variables are pulled from `git`. These can be replaced with calls to `svn`, `hg`, etc., or removed altogether if preferred.
+### Main package location
 
-These identifiers and others spcified in variable `EXPORTS` are automatically exported to your Go program, in package `IMPORTPATH`, via the `go` linker, and so may be used from your Go source code. This provides a way to share version, build date, and other information with your Go program.
+If your main import path is in the project root directory (where this `Makefile` is installed), or if it is in the `cmd/` subdirectory and has the same base name as the project root (e.g., `import/path/foo/cmd/foo`) it will be detected automatically. Otherwise, configure `GOCMD` with the Go import path to your main package:
+
+```make
+# if the command being built is different than the project import path, define
+# GOCMD as that import path. this will be used as the output executable when
+# making targets "build", "run", "install", etc.
+ifneq "" "$(wildcard cmd/$(PROJECT))"
+GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
+else
+GOCMD ?= # if left undefined, uses IMPORT
+endif
+```
+
+### Branch and revision identification
+
+By default, the `Makefile` expects your project to be in a Git repository. Because, when building, the `BRANCH` and `REVISION` variables are pulled from `git`. These can be replaced with calls to `svn`, `hg`, etc., or removed altogether if preferred. 
+
+If the project is not inside a Git repository, or you do not have Git command-line tools installed, then the `BRANCH` and `REVISION` variables will silently remain undefined:
+
+```make
+# determine git branch and revision if metadata exists
+ifneq "" "$(wildcard $(GOPATH)/src/$(IMPORT)/.git)"
+# verify we have git installed
+ifneq "" "$(shell which git)"
+BRANCH   ?= $(shell git symbolic-ref --short HEAD)
+REVISION ?= $(shell git rev-parse --short HEAD)
+endif
+endif
+```
+
+### Exported variables
+
+By default, the project name, import path, version, buildtime, target platform, branch, and revision - specified, if available, in variable `EXPORTS` - are automatically exported to your Go program, in package `EXPORTPATH`, via the `go` linker, and so may be used from your Go source code. 
+
+```make
+# Makefile identifiers to export (as strings) via Go linker
+EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
+	$(if $(BRANCH),BRANCH,) $(if $(REVISION),REVISION,) 
+```
+
+This provides a way to share version and build information with your Go program at build-time. You then only need to declare global identifiers in the package naamed by `EXPORTPATH` to access them:
+
+```go
+package main
+
+import "fmt"
+
+var PROJECT, IMPORT, VERSION, BUILDTIME, PLATFORM, BRANCH, REVISION string
+
+func main() {
+  fmt.Printf("%s %q v%s %s %s@%s %s\n", 
+    PROJECT, IMPORT, VERSION, PLATFORM, BRANCH, REVISION, BUILDTIME)
+}
+```
 
 ## Installation
 
