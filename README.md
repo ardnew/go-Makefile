@@ -3,9 +3,16 @@
 
 ## Usage
 
-Simply call `make` without arguments to build the project with default target `build`. Other targets include `clean`, `run`, `vet`, `zip`, `tgz`, and `tbz`. 
+Simply call `make` without arguments to build the project with default target `build`. Other targets include `clean`, `run`, `tidy`, `vet`, `zip`, `tgz`, and `tbz`. 
 
-The `run` target generates a shell script `./run.sh`. This shell script runs `make build` and then calls the project executable with all command-line arguments given to `run.sh`. This script is used because GNU Make does not have the explicit capability of forwarding arguments given to the `make` command on to an invoked executable. Therefore, instead of calling `make` directly, it is recommended to use this shell script for your normal edit-build-run development cycle.
+The `run` target generates a shell script `./run.sh`. This shell script runs `make build` and then calls the project executable with all command-line arguments given to `run.sh`. This script is used because GNU Make does not have the explicit capability of forwarding arguments given to the `make` command on to an invoked executable. Therefore, instead of calling `make` directly, it is recommended to use this shell script for your normal edit-build-run development cycle: 
+
+0.  Call `make run` only **one time**(!) to generate the `run.sh` script
+1.  Edit sources
+2.  Call `./run.sh [YOUR-PROGRAM-ARGS ...]` to rebuild and run the generated executable
+3.  Goto 1.
+
+### Cross-compiling
 
 To cross-compile the project for a different target, provide a `PLATFORM` variable definition with a valid `${GOOS}-${GOARCH}` tuple as argument. Other variables may also be specified this way. For example, to create a 64-bit Windows zip package with a specific version:
 
