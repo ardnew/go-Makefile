@@ -63,6 +63,9 @@ EXTRAFILES ?= LICENSE README.md
 # Go package where the exported symbols will be defined
 EXPORTPATH ?= main
 
+# Paths to remove when all of their contents are removed
+CLEANPARENT ?= $(BINPATH) $(PKGPATH)
+
 #        +==========================================================+           
 #      <||  YOU SHOULD NOT NEED TO MODIFY ANYTHING BELOW THIS LINE  ||>         
 #        +==========================================================+           
@@ -99,11 +102,13 @@ echo  := echo
 test  := test
 cd    := cd
 rm    := rm -rvf
+rmdir := rmdir
 mv    := mv -v
 cp    := cp -rv
 mkdir := mkdir -pv
 chmod := chmod -v
 tail  := tail
+ls    := command ls
 grep  := command grep
 go    := GOOS="$(os)" GOARCH="$(arch)" go
 tgz   := tar -czvf
@@ -121,6 +126,9 @@ outdir := $(BINPATH)/$(PLATFORM)
 outexe := $(outdir)/$(PROJECT)$(binext)
 pkgver := $(PKGPATH)/$(VERSION)
 triple := $(PROJECT)-$(VERSION)-$(PLATFORM)
+
+# make targets for directories to clean when their content is removed.
+pclean := $(addprefix clean-,$(CLEANPARENT))
 
 # Since it isn't possible to pass arguments from make to the target executable
 # (without, e.g., inline variable definitions), we simply use a separate shell
@@ -149,10 +157,16 @@ export RUNSH
 .PHONY: all
 all: build
 
-.PHONY: clean
-clean: tidy
+clean-%::
+	@test ! -d "$(*)" || test `$(ls) -v "$(*)"` || $(rmdir) -v "$(*)"
+
+.PHONY: flush
+flush:
 	$(go) clean
 	$(rm) "$(outdir)" "$(pkgver)/$(triple)" "$(runsh)"
+
+.PHONY: clean
+clean: tidy flush $(pclean)
 
 .PHONY: tidy
 tidy: $(METASOURCES)
