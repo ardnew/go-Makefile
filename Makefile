@@ -57,7 +57,7 @@ METASOURCES ?= Makefile go.mod
 # other files to include with distribution packages
 EXTRAFILES ?= LICENSE README.md
 
-# Go package import path where the exported symbols will be defined
+# Go package where the exported symbols will be defined
 EXPORTPATH ?= main
 
 #        +==========================================================+           
