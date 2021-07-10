@@ -35,18 +35,21 @@ EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
 # | build paths and project files                                              |
 # +----------------------------------------------------------------------------+
 
+# if the command being built is different than the project import path, define
+# GOCMD as that import path. this will be used as the output executable when
+# making targets "build", "run", "install", etc. for example, a common practice
+# is to place the project's main package in a "cmd" subdirectory. 
+ifneq "" "$(wildcard cmd/$(PROJECT))"
+# if a directory named PROJECT is found in the "cmd" subdirectory, use it as
+# the main package.
+GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
+else
+GOCMD ?= # otherwise, if GOCMD left undefined, use IMPORT.
+endif
+
 # default output paths
 BINPATH ?= bin
 PKGPATH ?= pkg
-
-# if the command being built is different than the project import path, define
-# GOCMD as that import path. this will be used as the output executable when
-# making targets "build", "run", "install", etc.
-ifneq "" "$(wildcard cmd/$(PROJECT))"
-GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
-else
-GOCMD ?= # if left undefined, uses IMPORT
-endif
 
 # consider all Go source files recursively from working dir
 SOURCES ?= $(shell find . -type f -iname '*.go')
