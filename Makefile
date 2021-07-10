@@ -39,6 +39,15 @@ EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
 BINPATH ?= bin
 PKGPATH ?= pkg
 
+# if the command being built is different than the project import path, define
+# GOCMD as that import path. this will be used as the output executable when
+# making targets "build", "run", "install", etc.
+ifneq "" "$(wildcard cmd/$(PROJECT))"
+GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
+else
+GOCMD ?= # if left undefined, uses IMPORT
+endif
+
 # consider all Go source files recursively from working dir
 SOURCES ?= $(shell find . -type f -iname '*.go')
 
@@ -51,16 +60,9 @@ EXTRAFILES ?= LICENSE README.md
 # Go package import path where the exported symbols will be defined
 EXPORTPATH ?= main
 
-# if the command being built is different than the project import path, define
-# GOCMD as that import path. this will be used as the output executable when
-# making targets "build", "run", "install", etc.
-ifneq "" "$(wildcard cmd/$(PROJECT))"
-GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
-else
-GOCMD ?= # if left undefined, uses IMPORT
-endif
-
-#       >=== YOU SHOULDN'T HAVE TO MODIFY ANYTHING BELOW THIS LINE ===>
+#        +==========================================================+           
+#      <||  YOU SHOULD NOT NEED TO MODIFY ANYTHING BELOW THIS LINE  ||>         
+#        +==========================================================+           
 
 # +----------------------------------------------------------------------------+
 # | constants and derived variables                                            |
