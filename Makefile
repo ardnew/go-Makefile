@@ -29,7 +29,7 @@ endif
 
 # Makefile identifiers to export (as strings) via Go linker
 EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM \
-	$(if $(BRANCH),BRANCH,) $(if $(REVISION),REVISION,) 
+	$(and $(BRANCH),BRANCH) $(and $(REVISION),REVISION) 
 
 # +----------------------------------------------------------------------------+
 # | build paths and project files                                              |
@@ -49,16 +49,17 @@ endif
 
 # default output paths
 BINPATH ?= bin
-PKGPATH ?= pkg
+PKGPATH ?= dist
 
 # consider all Go source files recursively from working dir
-SOURCES ?= $(shell find . -type f -iname '*.go')
+SOURCES ?= $(shell find . -type f -name '*.go')
 
 # other non-Go source files that may affect build staleness
-METASOURCES ?= Makefile go.mod
+METASOURCES ?= Makefile $(wildcard go.mod)
 
 # other files to include with distribution packages
-EXTRAFILES ?= LICENSE README.md
+EXTRAFILES ?= $(sort $(wildcard LICENSE*) $(wildcard README*) \
+	$(wildcard *.md) $(wildcard *.rst) $(wildcard *.adoc))
 
 # Go package where the exported symbols will be defined
 EXPORTPATH ?= main
@@ -67,7 +68,7 @@ EXPORTPATH ?= main
 CLEANPARENT ?= $(BINPATH) $(PKGPATH)
 
 #        +==========================================================+           
-#      <||  YOU SHOULD NOT NEED TO MODIFY ANYTHING BELOW THIS LINE  ||>         
+#   --=<])  YOU SHOULD NOT NEED TO MODIFY ANYTHING BELOW THIS LINE  ([>=--
 #        +==========================================================+           
 
 # +----------------------------------------------------------------------------+
@@ -92,7 +93,7 @@ os   := $(word 1,$(subst -, ,$(PLATFORM)))
 arch := $(word 2,$(subst -, ,$(PLATFORM)))
 
 # output file extensions
-binext := $(if $(filter windows,$(os)),.exe,)
+binext := $(and $(filter windows,$(os)),.exe)
 tgzext := .tar.gz
 tbzext := .tar.bz2
 zipext := .zip
@@ -169,8 +170,15 @@ flush:
 clean: tidy flush $(pclean)
 
 .PHONY: tidy
-tidy: $(METASOURCES)
+ifneq "" "$(strip $(filter %go.mod,$(METASOURCES)))"
+tidy: $(and "$(strip $(filter %go.mod,$(METASOURCES)))",mod)
 	@$(go) mod tidy
+else
+tidy:
+endif
+
+.PHONY: mod
+mod: go.mod
 
 .PHONY: build
 build: tidy $(outexe)
@@ -186,6 +194,9 @@ vet: tidy $(SOURCES) $(METASOURCES)
 
 .PHONY: run
 run: $(runsh)
+
+go.mod:
+	@$(go) mod init
 
 $(outdir) $(pkgver) $(pkgver)/$(triple):
 	@$(test) -d "$(@)" || $(mkdir) "$(@)"
