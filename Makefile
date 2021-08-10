@@ -230,12 +230,12 @@ $(outexe): $(SOURCES) $(METASOURCES) $(outdir)
 	@$(echo) " -- success: $(@)"
 
 $(runsh):
-	@$(echo) "$$RUNSH" > "$(@)"
+	@$(echo) "$$__RUNSH__" > "$(@)"
 	@$(chmod) +x "$(@)"
 	@$(echo) " -- success: $(@)"
 	@$(echo)
 	@# print the comment block at top of shell script for usage details
-	@$(sed) -nE '/^#!/,/^\s*[^#]/{ /^\s*#([^!]|$)/{ s/^(\s*)#/  |\1/;p } }' "$(@)"
+	@$(sed) -nE '/^#!/,/^\s*[^#]/{/^\s*#([^!]|$$)/{ s/^(\s*)#/  |\1/;p;};}' "$(@)"
 
 .PHONY: debug
 debug:
