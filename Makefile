@@ -3,7 +3,7 @@
 # +----------------------------------------------------------------------------+
 
 # Call to return the first non-empty value from "go env" or a default value.
-getgoenv := $(firstword $(foreach e,$(1),$(shell go env $(e))) $(2))
+getgoenv = $(firstword $(foreach e,$(1),$(shell go env $(e))) $(2))
 
 # Verify we have a valid GOPATH that physically exists.
 ifeq "" "$(strip $(wildcard $(GOPATH)))"
@@ -158,9 +158,6 @@ zip   := \zip -vr
 # Define any environment variables used for each "go" command invocation.
 # This would be a good place to set "go env" and cgo/clang variables.
 goenv :=                                                                       \
-  CGO_CPPFLAGS="$(cgocppflag)"                                                 \
-  CGO_CXXFLAGS="$(cgocxxflag)"                                                 \
-  CGO_LDFLAGS="$(cgoldflag)"                                                   \
   GOOS="$(os)" GOARCH="$(arch)"                                                \
   $(cgoflag)
 
