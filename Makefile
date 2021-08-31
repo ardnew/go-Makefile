@@ -5,25 +5,29 @@
 # Call to return the first non-empty value from "go env" or a default value.
 getgoenv = $(firstword $(foreach e,$(1),$(shell go env $(e))) $(2))
 
-# Verify we have a valid GOPATH that physically exists.
+GOPATH ?= $(call getgoenv,GOPATH)
+GOROOT ?= $(call getgoenv,GOROOT)
+
+# Verify we have a valid GOPATH, GOROOT that physically exist.
 ifeq "" "$(strip $(wildcard $(GOPATH)))"
   $(error invalid GOPATH="$(GOPATH)")
+else ifeq "" "$(strip $(wildcard $(GOROOT)))"
+  $(error invalid GOROOT="$(GOROOT)")
 endif
 
 # Define which debugger to use (optional; disables optimizations).
 # If undefined, optimizations are enabled and debug targets are empty.
 # Recognized debuggers: gdb dlv
-DEBUG ?= gdb
+DEBUG ?= dlv
 
 # Verify environment is suited for whichever debugger (if any) is selected.
 ifeq "gdb" "$(DEBUG)"
   # Go source code ships with a GDB Python extension that enables:
   #   -- Inspection of runtime internals (e.g., goroutines)
   #   -- Pretty-printing built-in types (e.g., map, slice, and channel)
-  ifeq "" "$(GOROOT)"
-    $(error invalid GOROOT="$(GOROOT)")
-  endif
   GDBRTL ?= "$(wildcard $(GOROOT)/src/runtime/runtime-gdb.py)"
+  # If you have gdb-dashboard available, specify its path here.
+  GDBDSH ?= "$(wildcard $(HOME)/.gdb-dashboard)"
 endif
 
 # +----------------------------------------------------------------------------+
@@ -65,8 +69,10 @@ EXPORTS ?= PROJECT IMPORT VERSION BUILDTIME PLATFORM                           \
 ifneq "" "$(wildcard cmd/$(PROJECT))"
   # If a directory named PROJECT is found in the "cmd" subdirectory, use it as
   # the main package.
-  GOCMD ?= $(IMPORT)/cmd/$(PROJECT)
+  GOSRC ?= cmd/$(PROJECT)
+  GOCMD ?= $(IMPORT)/$(GOSRC)
 else
+  GOSRC ?= .
   GOCMD ?= # Otherwise, if GOCMD left undefined, use IMPORT.
 endif
 
@@ -92,20 +98,20 @@ EXPORTPATH ?= main
 # | build flags and configuration                                              |
 # +----------------------------------------------------------------------------+
 
-# Append any other build tags needed, separated by a single comma (no spaces!).
+# Append any other build tags needed, separated by a single comma (no space!).
 #GOTAGS ?= byollvm
 GOTAGS ?=
 
 # Export variables as strings to the selected package, and, if a debugger was
 # NOT selected, strip symbol table and omit DWARF debug segments.
-GOLDFLAGS ?= -ldflags='$(if $(strip $(DEBUG)),,-w -s)                          \
-  $(foreach %,$(EXPORTS),-X "$(EXPORTPATH).$(%)=$($(%))")'
+GOLDFLAGS ?= -ldflags='$(if $(strip $(DEBUG)),,-w -s )$(foreach                \
+  %,$(EXPORTS),-X "$(EXPORTPATH).$(%)=$($(%))")'
 
 # If a debugger was selected, disable most compiler optimizations.
-GOGCFLAGS ?= $(and $(strip $(DEBUG)),-gcflags=all="-N -l")
+GOGCFLAGS ?= $(and $(strip $(DEBUG)),-gcflags=all='-N -l')
 
 # This is also a good place to add any global build flags you need.
-GOFLAGS ?= -v -tags="$(GOTAGS)" $(GOLDFLAGS) $(GOGCFLAGS)
+GOFLAGS ?= -v -tags='$(GOTAGS)' $(GOLDFLAGS) $(GOGCFLAGS)
 
 #        +==========================================================+
 #   --=<])  YOU SHOULD NOT NEED TO MODIFY ANYTHING BELOW THIS LINE  ([>=--
@@ -138,22 +144,27 @@ tgzext := .tar.gz
 tbzext := .tar.bz2
 zipext := .zip
 
-env   := \env
-echo  := \echo
-test  := \test
-cd    := \cd
-rm    := \rm -rvf
-rmdir := \rmdir
-cp    := \cp -rv
-mkdir := \mkdir -pv
-chmod := \chmod -v
-tail  := \tail
-ls    := \ls
-grep  := \grep
-sed   := \sed
-tgz   := \tar -czvf
-tbz   := \tar -cjvf
-zip   := \zip -vr
+env    := \env
+export := \export
+echo   := \echo
+test   := \test
+cd     := \cd
+rm     := \rm -rvf
+rmdir  := \rmdir
+cp     := \cp -rv
+mkdir  := \mkdir -p
+chmod  := \chmod -v
+tail   := \tail
+ls     := \ls
+grep   := \grep
+sed    := \sed
+jq     := \jq
+gdb    := \gdb
+dlv    := \dlv-dap
+tmux   := \tmux
+tgz    := \tar -czvf
+tbz    := \tar -cjvf
+zip    := \zip -vr
 
 # Define any environment variables used for each "go" command invocation.
 # This would be a good place to set "go env" and cgo/clang variables.
@@ -163,7 +174,8 @@ goenv :=                                                                       \
 
 # Always call "go" with our relevant clang/cgo flags as well as our Makefile-
 # defined target platform, which enables cross-compilation support.
-go := $(goenv) command go
+go    := $(goenv) \go
+gofmt := $(goenv) \gofmt
 
 # Output paths derived from current configuration:
 srcdir := $(or $(GOCMD),$(IMPORT))
@@ -194,6 +206,17 @@ fi
 endef
 export __RUNSH__
 
+# The following script is a `jq` filter that will translate sh-style environment
+# variable definitions into JSON syntax: 'KEY=VALUE' -> '{"KEY": "VALUE"}'
+define __JQFILTER__
+  def parse: capture("(?<ident>[^=]*)=(?<value>.*)");
+  reduce inputs as $$line ({};
+    ($$line | parse) as $$p
+    | .[$$p.ident] = ($$p.value) )
+
+endef
+export __JQFILTER__
+
 # +----------------------------------------------------------------------------+
 # | make targets                                                               |
 # +----------------------------------------------------------------------------+
@@ -215,11 +238,15 @@ clean: tidy flush $(addprefix clean-,$(BINPATH) $(PKGPATH))
 
 .PHONY: tidy
 ifneq "" "$(strip $(filter %go.mod,$(METASOURCES)))"
-tidy: $(and "$(strip $(filter %go.mod,$(METASOURCES)))",mod)
+tidy: $(and "$(strip $(filter %go.mod,$(METASOURCES)))",mod) fmt
 	@$(go) mod tidy
 else
-tidy:
+tidy: fmt
 endif
+
+.PHONY: fmt
+fmt: $(SOURCES) $(METASOURCES)
+	@$(gofmt) -e -l -s -w .
 
 .PHONY: mod
 mod: go.mod
@@ -233,7 +260,7 @@ install: tidy
 	@$(echo) " -- success: $(binexe)"
 
 .PHONY: vet
-vet: tidy $(SOURCES) $(METASOURCES)
+vet: tidy
 	$(go) vet "$(IMPORT)" $(and $(GOCMD),"$(GOCMD)")
 
 .PHONY: run
@@ -241,9 +268,9 @@ run: $(runsh)
 
 .PHONY: goenv
 goenv:
-	@# Print each environment variable in "sh" declaration format (KEY=VAL).
-	@# TODO: Print environment in JSON format (for .vscode settings).
-	@$(env) -i $(goenv) env
+	@# Drop the pipe to generate a sh-compatible environment:
+	@#   $(env) -i $(goenv) env
+	@$(env) -i $(goenv) env | $(jq) -nR "$$__JQFILTER__"
 
 .PHONY: goflags
 goflags:
@@ -253,7 +280,7 @@ go.mod:
 	@$(go) mod init "$(IMPORT)"
 
 $(outdir) $(pkgver) $(pkgver)/$(triple):
-	@$(test) -d "$(@)" || $(mkdir) "$(@)"
+	@$(test) -d "$(@)" || $(mkdir) -v "$(@)"
 
 $(outexe): $(SOURCES) $(METASOURCES) $(outdir)
 	$(go) build -o "$(@)" $(GOFLAGS) "$(srcdir)"
@@ -268,13 +295,13 @@ $(runsh):
 	@$(sed) -nE '/^#!/,/^\s*[^#]/{/^\s*#([^!]|$$)/{s/^(\s*)#/  |\1/;p;};}' "$(@)"
 
 .PHONY: debug
-debug:
+debug: vet build
 ifeq "gdb" "$(DEBUG)"
-	@$(echo) "gdb: $(DEBUG) $(GDBRTL)"
+	@$(gdb) "$(outexe)"
 else ifeq "dlv" "$(DEBUG)"
-	@$(echo) "dlv: $(DEBUG) $(GDBRTL)"
+	@$(dlv) debug "$(or $(GOCMD),$(IMPORT))"
 else
-	@$(echo) "none: $(DEBUG) $(GDBRTL)"
+	@$(echo) "none: $(DEBUG)"
 endif
 
 # +----------------------------------------------------------------------------+
@@ -301,4 +328,3 @@ tbz: $(EXTRAFILES) $(pkgver)/$(triple)$(tbzext)
 $(pkgver)/%$(tbzext): $(outexe) $(pkgver)/%
 	$(cp) "$(<)" $(EXTRAFILES) "$(@D)/$(*)"
 	@$(cd) "$(@D)" && $(tbz) "$(*)$(tbzext)" "$(*)"
-
